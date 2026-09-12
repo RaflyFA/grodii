@@ -48,6 +48,25 @@ const products = [
   { name: 'Cleaning Service', price: 'Rp 24.000', rawPrice: 24000, category: 'Layanan', tone: 'sage', desc: 'Layanan pencucian & perawatan higienis (kapasitas 2 kg)', badge: 'Praktis', badgeType: 'amber', image: '/cleaning service.jpg' },
 ]
 
+const DIAPER_SIZES = [
+  { id: 'S', label: 'Size S', weight: '3 - 7 kg' },
+  { id: 'M', label: 'Size M', weight: '7 - 12 kg' },
+  { id: 'L', label: 'Size L', weight: '11 - 15 kg' },
+  { id: 'XL', label: 'Size XL', weight: '14 - 18 kg' },
+  { id: 'XXL', label: 'Size XXL', weight: '> 17 kg' },
+] as const
+
+type CartItem = {
+  id: string
+  name: string
+  price: number
+  image: string
+  quantity: number
+  sizeInfo?: string
+  sizeFrom?: string
+  sizeTo?: string
+}
+
 const tabs = [
   { id: 'home', label: 'Beranda', icon: Home },
   { id: 'shop', label: 'Belanja', icon: ShoppingBag },
@@ -76,9 +95,14 @@ export default function Page() {
   const [tradeSelectedInsert, setTradeSelectedInsert] = useState(true)
   const [tradeSuccessModal, setTradeSuccessModal] = useState(false)
 
+  // Size Upgrade Selector State
+  const [sizeUpgradeModal, setSizeUpgradeModal] = useState(false)
+  const [sizeFrom, setSizeFrom] = useState<string>('M')
+  const [sizeTo, setSizeTo] = useState<string>('L')
+
   // Cart & Checkout State
-  const [cart, setCart] = useState<{ [key: string]: { name: string; price: number; image: string; quantity: number } }>({
-    'Outer': { name: 'Outer', price: 65000, image: '/outer.webp', quantity: 1 }
+  const [cart, setCart] = useState<{ [key: string]: CartItem }>({
+    'Outer': { id: 'Outer', name: 'Outer', price: 65000, image: '/outer.webp', quantity: 1 }
   })
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'checkout' | 'success'>('cart')
@@ -86,6 +110,7 @@ export default function Page() {
   const [paymentMethod, setPaymentMethod] = useState<'qris' | 'cod' | 'ewallet'>('qris')
   const [hasActiveOrder, setHasActiveOrder] = useState(false)
   const [hasActiveTradeIn, setHasActiveTradeIn] = useState(false)
+  const [lastOrderedItems, setLastOrderedItems] = useState<CartItem[]>([])
 
   const cartList = Object.values(cart)
   const cartCount = cartList.reduce((sum, item) => sum + item.quantity, 0)
@@ -103,28 +128,52 @@ export default function Page() {
       if (existing) {
         return { ...prev, [product.name]: { ...existing, quantity: existing.quantity + 1 } }
       }
-      return { ...prev, [product.name]: { name: product.name, price: rawPrice, image: product.image, quantity: 1 } }
+      return { ...prev, [product.name]: { id: product.name, name: product.name, price: rawPrice, image: product.image, quantity: 1 } }
     })
   }
 
-  const updateQuantity = (name: string, delta: number) => {
+  const addSizeUpgradeToCart = (from: string, to: string) => {
+    const itemId = `Size Upgrade (${from} → ${to})`
     setCart((prev) => {
-      const item = prev[name]
+      const existing = prev[itemId]
+      if (existing) {
+        return { ...prev, [itemId]: { ...existing, quantity: existing.quantity + 1 } }
+      }
+      return {
+        ...prev,
+        [itemId]: {
+          id: itemId,
+          name: 'Size Upgrade',
+          price: 48000,
+          image: '/size upgrade.webp',
+          quantity: 1,
+          sizeInfo: `${from} → ${to}`,
+          sizeFrom: from,
+          sizeTo: to,
+        },
+      }
+    })
+    setSizeUpgradeModal(false)
+  }
+
+  const updateQuantity = (id: string, delta: number) => {
+    setCart((prev) => {
+      const item = prev[id]
       if (!item) return prev
       const newQty = item.quantity + delta
       if (newQty <= 0) {
         const next = { ...prev }
-        delete next[name]
+        delete next[id]
         return next
       }
-      return { ...prev, [name]: { ...item, quantity: newQty } }
+      return { ...prev, [id]: { ...item, quantity: newQty } }
     })
   }
 
-  const removeFromCart = (name: string) => {
+  const removeFromCart = (id: string) => {
     setCart((prev) => {
       const next = { ...prev }
-      delete next[name]
+      delete next[id]
       return next
     })
   }
@@ -608,6 +657,13 @@ export default function Page() {
                           className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-primary/90 active:scale-95"
                         >
                           <WashingMachine className="size-3.5" /> Booking Cuci
+                        </button>
+                      ) : product.name === 'Size Upgrade' ? (
+                        <button 
+                          onClick={() => setSizeUpgradeModal(true)} 
+                          className="mt-2.5 w-full rounded-xl bg-primary py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-primary/90 active:scale-95"
+                        >
+                          + Tambah
                         </button>
                       ) : (
                         <button 
@@ -1356,6 +1412,155 @@ export default function Page() {
         )}
 
         {/* ========================================================================= */}
+        {/* MODAL: SIZE UPGRADE SELECTION POPUP                                       */}
+        {/* ========================================================================= */}
+        {sizeUpgradeModal && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="w-full max-w-md rounded-t-[32px] sm:rounded-[32px] bg-card p-6 shadow-2xl animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  
+                  <div>
+                    <h3 className="text-base font-extrabold text-ink">Pilih Ukuran Size Upgrade</h3>
+                    
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSizeUpgradeModal(false)}
+                  className="grid size-8 place-items-center rounded-full bg-soft text-ink/60 hover:text-ink transition-colors"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              {/* Step 1: Ukuran Awal */}
+              <div className="mt-5">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-ink flex items-center gap-1.5">
+                    
+                    Ukuran Popok Saat Ini (Asal)
+                  </label>
+                  <span className="text-[11px] font-bold text-primary">Pilihan: Size {sizeFrom}</span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {DIAPER_SIZES.slice(0, 4).map((size) => {
+                    const isSelected = sizeFrom === size.id
+                    return (
+                      <button
+                        key={size.id}
+                        type="button"
+                        onClick={() => {
+                          setSizeFrom(size.id)
+                          // Jika sizeTo saat ini <= ukuran baru, otomatis geser sizeTo ke ukuran berikutnya
+                          const newFromIdx = DIAPER_SIZES.findIndex((s) => s.id === size.id)
+                          const toIdx = DIAPER_SIZES.findIndex((s) => s.id === sizeTo)
+                          if (toIdx <= newFromIdx) {
+                            setSizeTo(DIAPER_SIZES[Math.min(newFromIdx + 1, DIAPER_SIZES.length - 1)].id)
+                          }
+                        }}
+                        className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all ${
+                          isSelected
+                            ? 'border-primary bg-primary text-white font-bold shadow-xs shadow-primary/25'
+                            : 'border-line bg-page text-ink/80 hover:border-primary/40'
+                        }`}
+                      >
+                        <span className="text-xs font-extrabold">{size.label}</span>
+                        <span className={`text-[9px] mt-0.5 ${isSelected ? 'text-white/80' : 'text-muted-foreground'}`}>
+                          {size.weight}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Arrow separator divider */}
+              <div className="my-3 flex items-center justify-center gap-2">
+                <div className="h-px flex-1 bg-line" />
+                
+                <div className="h-px flex-1 bg-line" />
+              </div>
+
+              {/* Step 2: Ukuran Upgrade (Tujuan) */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-ink flex items-center gap-1.5">
+                    
+                    Ukuran Baru
+                  </label>
+                  <span className="text-[11px] font-bold text-primary">Target: Size {sizeTo}</span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {DIAPER_SIZES.map((size, idx) => {
+                    const fromIdx = DIAPER_SIZES.findIndex((s) => s.id === sizeFrom)
+                    const isDisabled = idx <= fromIdx
+                    const isSelected = sizeTo === size.id
+
+                    return (
+                      <button
+                        key={size.id}
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => setSizeTo(size.id)}
+                        className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border text-center transition-all ${
+                          isSelected
+                            ? 'border-primary bg-primary text-white font-bold shadow-xs shadow-primary/25'
+                            : isDisabled
+                            ? 'border-dashed border-line bg-muted/40 text-muted-foreground/40 cursor-not-allowed opacity-60'
+                            : 'border-line bg-page text-ink/80 hover:border-primary/40'
+                        }`}
+                      >
+                        <span className="text-xs font-extrabold">{size.id}</span>
+                        <span className={`text-[8px] mt-0.5 leading-tight ${isSelected ? 'text-white/80' : 'text-muted-foreground'}`}>
+                          {isDisabled ? '≤ Asal' : size.weight.split(' ')[0]}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Summary Highlight Box */}
+              <div className="mt-4 rounded-2xl border border-primary/20 bg-soft/70 p-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="grid size-9 place-items-center rounded-xl  text-ink font-bold text-lg ">
+                    {sizeFrom}
+                  </div>
+                  <ArrowRight className="size-4 text-primary font-bold animate-pulse" />
+                  <div className="grid size-9 place-items-center rounded-xl  text-ink font-bold text-lg">
+                    {sizeTo}
+                  </div>
+                  
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-muted-foreground">Biaya Layanan</p>
+                  <p className="text-xs font-extrabold text-primary">Rp 48.000</p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-5 flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSizeUpgradeModal(false)}
+                  className="w-1/3 rounded-2xl border border-line py-3 text-xs font-bold text-ink hover:bg-soft transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addSizeUpgradeToCart(sizeFrom, sizeTo)}
+                  className="w-2/3 rounded-2xl bg-primary py-3 text-xs font-bold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary/90 active:scale-95"
+                >
+                  + Tambah ke Keranjang
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
         {/* CART & CHECKOUT MODAL                                                     */}
         {/* ========================================================================= */}
         {isCartOpen && (
@@ -1399,34 +1604,49 @@ export default function Page() {
                       </div>
                     ) : (
                       cartList.map((item) => (
-                        <div key={item.name} className="flex items-center gap-3.5 rounded-2xl border border-line bg-page p-3 shadow-xs">
+                        <div key={item.id} className="flex items-center gap-3.5 rounded-2xl border border-line bg-page p-3 shadow-xs">
                           <img src={item.image} alt={item.name} className="size-16 shrink-0 rounded-xl object-cover" />
                           <div className="flex-1 min-w-0">
-                            <h3 className="truncate text-xs font-bold text-ink">{item.name}</h3>
-                            <p className="mt-0.5 text-xs font-extrabold text-primary">Rp {(item.price).toLocaleString('id-ID')}</p>
+                            <div className="flex items-start justify-between gap-1">
+                              <h3 className="truncate text-xs font-bold text-ink">{item.name}</h3>
+                              <button 
+                                onClick={() => removeFromCart(item.id)}
+                                className="p-0.5 text-ink/40 hover:text-red-600 transition-colors"
+                                aria-label="Hapus item"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            </div>
+
+                            {item.sizeInfo && (
+                              <div className="mt-1 flex items-center gap-1.5">
+                                <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                                  <Layers className="size-3" /> Size: {item.sizeInfo}
+                                </span>
+                              </div>
+                            )}
+
+                            <p className="mt-1 text-xs font-extrabold text-primary">Rp {(item.price).toLocaleString('id-ID')}</p>
                             
                             <div className="mt-2 flex items-center justify-between">
                               <div className="flex items-center gap-2 rounded-lg border border-line bg-card px-2 py-1">
                                 <button 
-                                  onClick={() => updateQuantity(item.name, -1)}
+                                  onClick={() => updateQuantity(item.id, -1)}
                                   className="text-ink/60 hover:text-ink transition-colors"
                                 >
                                   <Minus className="size-3.5" />
                                 </button>
                                 <span className="text-xs font-bold text-ink px-1">{item.quantity}</span>
                                 <button 
-                                  onClick={() => updateQuantity(item.name, 1)}
+                                  onClick={() => updateQuantity(item.id, 1)}
                                   className="text-ink/60 hover:text-ink transition-colors"
                                 >
                                   <Plus className="size-3.5" />
                                 </button>
                               </div>
-                              <button 
-                                onClick={() => removeFromCart(item.name)}
-                                className="p-1 text-red-400 hover:text-red-600 transition-colors"
-                              >
-                                <Trash2 className="size-4" />
-                              </button>
+                              <span className="text-[11px] font-bold text-ink/70">
+                                Total: Rp {(item.price * item.quantity).toLocaleString('id-ID')}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -1472,6 +1692,48 @@ export default function Page() {
 
                   <div className="no-scrollbar overflow-y-auto px-6 py-4 flex flex-col gap-4">
                     
+                    {/* Ringkasan Produk & Ukuran */}
+                    <div className="rounded-2xl border border-line bg-page p-4">
+                      <div className="flex items-center justify-between mb-2.5">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                          <ShoppingBag className="size-3.5 text-primary" /> Produk Dipesan ({cartCount})
+                        </span>
+                        <button 
+                          onClick={() => setCheckoutStep('cart')}
+                          className="text-xs font-semibold text-primary hover:underline"
+                        >
+                          Ubah
+                        </button>
+                      </div>
+                      <div className="flex flex-col gap-2.5 divide-y divide-line/60">
+                        {cartList.map((item) => (
+                          <div key={item.id} className="pt-2 first:pt-0 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <img src={item.image} alt={item.name} className="size-10 rounded-xl object-cover shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-ink truncate">{item.name}</p>
+                                {item.sizeInfo ? (
+                                  <div className="mt-0.5 flex items-center gap-1">
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                                      <Layers className="size-3" /> Size: {item.sizeInfo}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <p className="text-[10px] text-muted-foreground">Kuantitas: {item.quantity} pcs</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs font-bold text-ink">Rp {(item.price * item.quantity).toLocaleString('id-ID')}</p>
+                              {item.sizeInfo && (
+                                <p className="text-[10px] text-muted-foreground">Qty: {item.quantity}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Alamat Pengiriman */}
                     <div className="rounded-2xl border border-line bg-page p-4">
                       <div className="flex items-center justify-between mb-2">
@@ -1550,6 +1812,24 @@ export default function Page() {
                         <span>Ongkos Kirim</span>
                         <span className="font-semibold text-green-600">Gratis (Promo)</span>
                       </div>
+
+                      {/* Keterangan Layanan Size Upgrade */}
+                      {cartList.some((i) => i.sizeInfo) && (
+                        <div className="my-1 rounded-xl bg-primary/5 p-2.5 border border-primary/15 text-[11px] text-ink/80 flex items-start gap-2">
+                          <Layers className="size-3.5 text-primary shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold text-primary">Penyesuaian Ukuran Popok:</span>
+                            <div className="mt-0.5 space-y-0.5">
+                              {cartList.filter((i) => i.sizeInfo).map((i) => (
+                                <p key={i.id}>
+                                  • Size {i.sizeInfo} (x{i.quantity})
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="mt-2 border-t border-line pt-2 flex justify-between items-center text-sm font-bold text-ink">
                         <span>Total Pembayaran</span>
                         <span className="text-base font-extrabold text-primary">Rp {finalTotal.toLocaleString('id-ID')}</span>
@@ -1561,6 +1841,7 @@ export default function Page() {
                   <div className="border-t border-line bg-card p-6">
                     <button 
                       onClick={() => {
+                        setLastOrderedItems(cartList)
                         setHasActiveOrder(true)
                         setCheckoutStep('success')
                         setCart({})
@@ -1582,11 +1863,32 @@ export default function Page() {
                   <h2 className="mt-4 text-xl font-extrabold text-ink">Pesanan Berhasil!</h2>
                   <p className="mt-1 text-xs font-semibold text-primary">No. Pesanan: #GRD-20260822-001</p>
                   
-                  <p className="mt-3 text-xs text-muted-foreground leading-relaxed max-w-xs">
-                    Terima kasih Bunda Nabila! Pesananmu sedang dikemas dan kurir kami akan segera mengantarkannya.
+                  <p className="mt-3 text-xs text-muted-foreground leading-relaxed max-w-xs text-center">
+                    Terima kasih Bunda Nabila! Pesananmu sedang diproses dan kurir kami akan segera mengantarkannya.
                   </p>
 
-                  <div className="mt-6 w-full rounded-2xl border border-line bg-page p-3.5 text-left text-xs">
+                  {/* Keterangan Size Upgrade jika ada */}
+                  {lastOrderedItems.some((i) => i.sizeInfo) && (
+                    <div className="mt-4 w-full rounded-2xl border border-primary/20 bg-primary/5 p-3.5 text-left text-xs">
+                      <div className="flex items-center gap-1.5 font-bold text-primary mb-1.5">
+                        <Layers className="size-4" />
+                        <span>Layanan Penyesuaian Ukuran Terjadwal</span>
+                      </div>
+                      <div className="space-y-1 text-ink/80 text-[11px]">
+                        {lastOrderedItems.filter((i) => i.sizeInfo).map((i) => (
+                          <div key={i.id} className="flex justify-between items-center">
+                            <span>• Upgrade Size {i.sizeInfo} ({i.quantity} pcs)</span>
+                            <span className="font-semibold text-primary">Rp {(i.price * i.quantity).toLocaleString('id-ID')}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[10px] text-muted-foreground leading-relaxed border-t border-primary/10 pt-1.5">
+                        💡 Silakan siapkan popok lama si kecil, kurir kami akan menukar langsung dengan ukuran baru.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="mt-4 w-full rounded-2xl border border-line bg-page p-3.5 text-left text-xs">
                     <div className="flex justify-between text-muted-foreground">
                       <span>Estimasi Pengiriman:</span>
                       <span className="font-bold text-ink">Besok, 09:00 WIB</span>
