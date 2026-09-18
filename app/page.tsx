@@ -100,6 +100,11 @@ export default function Page() {
   const [sizeFrom, setSizeFrom] = useState<string>('M')
   const [sizeTo, setSizeTo] = useState<string>('L')
 
+  // Size Selection State (Outer & Starter Kit)
+  const [sizeSelectionModal, setSizeSelectionModal] = useState(false)
+  const [selectedProductForSize, setSelectedProductForSize] = useState<{ name: string; price: string; rawPrice?: number; image: string } | null>(null)
+  const [selectedSize, setSelectedSize] = useState<string>('')
+
   // Cart & Checkout State
   const [cart, setCart] = useState<{ [key: string]: CartItem }>({
     'Outer': { id: 'Outer', name: 'Outer', price: 65000, image: '/outer.webp', quantity: 1 }
@@ -154,6 +159,33 @@ export default function Page() {
       }
     })
     setSizeUpgradeModal(false)
+  }
+
+  const addWithSizeToCart = () => {
+    if (!selectedProductForSize || !selectedSize) return
+    const rawPrice = selectedProductForSize.rawPrice || parseInt(selectedProductForSize.price.replace(/[^0-9]/g, '')) || 75000
+    const sizeLabel = DIAPER_SIZES.find((s) => s.id === selectedSize)?.label || `Size ${selectedSize}`
+    const itemId = `${selectedProductForSize.name} - ${sizeLabel}`
+    setCart((prev) => {
+      const existing = prev[itemId]
+      if (existing) {
+        return { ...prev, [itemId]: { ...existing, quantity: existing.quantity + 1 } }
+      }
+      return {
+        ...prev,
+        [itemId]: {
+          id: itemId,
+          name: selectedProductForSize.name,
+          price: rawPrice,
+          image: selectedProductForSize.image,
+          quantity: 1,
+          sizeInfo: sizeLabel,
+        },
+      }
+    })
+    setSizeSelectionModal(false)
+    setSelectedProductForSize(null)
+    setSelectedSize('')
   }
 
   const updateQuantity = (id: string, delta: number) => {
@@ -588,7 +620,11 @@ export default function Page() {
                   <div className="mt-3">
                     <p className="text-xs font-bold text-primary">Rp 65.000</p>
                     <button 
-                      onClick={() => addToCart({ name: 'Outer', price: 'Rp 65.000', rawPrice: 65000, image: '/outer.webp' })} 
+                      onClick={() => {
+                        setSelectedProductForSize({ name: 'Outer', price: 'Rp 65.000', rawPrice: 65000, image: '/outer.webp' })
+                        setSelectedSize('')
+                        setSizeSelectionModal(true)
+                      }} 
                       className="mt-2 w-full rounded-lg bg-primary py-1.5 text-[11px] font-bold text-white shadow-xs transition-all hover:bg-primary/90 active:scale-95"
                     >
                       + Tambah
@@ -611,7 +647,11 @@ export default function Page() {
                   <div className="mt-3">
                     <p className="text-xs font-bold text-primary">Rp 275.000</p>
                     <button 
-                      onClick={() => addToCart({ name: 'Starter Kit', price: 'Rp 275.000', rawPrice: 275000, image: '/starter kit.jpg' })} 
+                      onClick={() => {
+                        setSelectedProductForSize({ name: 'Starter Kit', price: 'Rp 275.000', rawPrice: 275000, image: '/starter kit.jpg' })
+                        setSelectedSize('')
+                        setSizeSelectionModal(true)
+                      }} 
                       className="mt-2 w-full rounded-lg bg-primary py-1.5 text-[11px] font-bold text-white shadow-xs transition-all hover:bg-primary/90 active:scale-95"
                     >
                       + Tambah
@@ -661,6 +701,17 @@ export default function Page() {
                       ) : product.name === 'Size Upgrade' ? (
                         <button 
                           onClick={() => setSizeUpgradeModal(true)} 
+                          className="mt-2.5 w-full rounded-xl bg-primary py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-primary/90 active:scale-95"
+                        >
+                          + Tambah
+                        </button>
+                      ) : ['Outer', 'Starter Kit'].includes(product.name) ? (
+                        <button 
+                          onClick={() => {
+                            setSelectedProductForSize(product)
+                            setSelectedSize('')
+                            setSizeSelectionModal(true)
+                          }} 
                           className="mt-2.5 w-full rounded-xl bg-primary py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-primary/90 active:scale-95"
                         >
                           + Tambah
@@ -1556,6 +1607,60 @@ export default function Page() {
                   + Tambah ke Keranjang
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* MODAL: SIZE SELECTION POPUP (Outer & Starter Kit)                         */}
+        {/* ========================================================================= */}
+        {sizeSelectionModal && selectedProductForSize && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="w-full max-w-sm rounded-t-[32px] sm:rounded-[32px] bg-card p-6 shadow-2xl animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200">
+              <div className="mb-6 flex items-start justify-between">
+                <div>
+                  <h3 className="text-lg font-extrabold text-ink">Pilih Ukuran</h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Ukuran untuk <span className="font-bold text-ink">{selectedProductForSize.name}</span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSizeSelectionModal(false)}
+                  className="grid size-8 place-items-center rounded-full bg-soft text-ink/60 transition-colors hover:bg-line hover:text-ink"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {DIAPER_SIZES.map((size) => {
+                  const isSelected = selectedSize === size.id
+                  return (
+                    <button
+                      key={size.id}
+                      onClick={() => setSelectedSize(size.id)}
+                      className={`flex flex-col items-center justify-center rounded-2xl border p-3.5 transition-all ${
+                        isSelected
+                          ? 'border-primary bg-primary text-white font-bold shadow-md shadow-primary/25'
+                          : 'border-line bg-page text-ink/80 hover:border-primary/40'
+                      }`}
+                    >
+                      <span className="text-sm font-extrabold">{size.label}</span>
+                      <span className={`mt-1 text-[10px] font-medium ${isSelected ? 'text-white/80' : 'text-muted-foreground'}`}>
+                        {size.weight}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <button
+                disabled={!selectedSize}
+                onClick={addWithSizeToCart}
+                className="mt-6 w-full rounded-2xl bg-primary py-3.5 text-sm font-bold text-white shadow-md shadow-primary/30 transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-50 disabled:shadow-none"
+              >
+                + Tambah ke Keranjang
+              </button>
             </div>
           </div>
         )}
